@@ -29,7 +29,7 @@ end
 D
 
 function Rdc = computeRdc(D, p, l=1)
-	Rdc=p./(pi()./4*D.^2);
+	Rdc=l.*p./(pi()./4*D.^2);
 end
 
 function Rac = computeRac(D, d, p, l=1)
@@ -62,7 +62,7 @@ title(["Skin depth for Frequency of: " n])
 D=0.2:0.01:1.6; % in mm
 figure(2)
 hold off
-semilogy(D, l*p./(pi()/4*D.^2))
+semilogy(D, computeRdc(D, p, l))
 grid on
 hold on
 semilogy(D, computeRac(D, d, p, l))
