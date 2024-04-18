@@ -16,7 +16,9 @@ function r=morse(str)
 			continue
 		end
 		bits=floor(log2(idx));
-		if bits > 0
+		if bits == 0
+			r=[r, zeros(1, 3)]; %
+		else
 			for i = bits-1:-1:0
 				v=bitand(idx, 2^i);
 				if v > 0
@@ -33,22 +35,22 @@ function r=morse(str)
 		printf("\n");
 	end
 end
-code=morse("DL5IRO");
+code=morse("CQ CQ CQ DE DL5IRO");
 
 Fs=8000;
 
-ditDuration=100e-3;
+ditDuration=60e-3; % 20WpM = 60ms ; 12WpM = 100ms ; ms = 1200/WpM
 F=700; % use 0Hz to hear/display the hull
 % also you can hear the leakage from DC without the tone
 % problem is hearing starts at about 20Hz and your ears are probalby not very linear in this range
-B=20; % bandwidth of noise set to 0 to disable
+B=0; % bandwidth of noise set to 0 to disable
 
 rampOffset=1e-2; % initial step allowed to make
 % a step of 1e-2 is equal to -40dB discontinuiti
 % used by at least exp & hamming window
-rampTime=10e-3;
+rampTime=5e-3;
 % the ramp time is the total duration of the ramp
-% the ramp is centered on the transient, and extends in both direction
+% the ramp is centered on the transient, and extends half in both direction
 
 if rampTime > ditDuration
     printf("Invalid arguments: rampTime (%g) > ditDuration (%g)\n", rampTime, ditDuration)
@@ -72,7 +74,7 @@ rampNut =rampCosiNuts(tRamp, 0.355768, 0.487396, 0.144232, 0.012604);
 rampBlackNut=rampCosiNuts(tRamp, 0.3635819, 0.4891775, 0.1365995, 0.0106411);
 rampFlatTop=rampCosiNuts(tRamp, 0.21557895, 0.41663158, 0.277263158, 0.083578947, 0.006947368);
 
-ramp=rampFlatTop;
+ramp=rampHann;
 
 ditSamples=round(Fs*ditDuration);
 Z=zeros(1,(ditSamples - length(ramp)));
