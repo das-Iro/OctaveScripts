@@ -1,7 +1,7 @@
 clc
 clear all
 
-% If I had more time I would have written you a shorter code
+# If I had more time I would have written you a shorter code
 
 function r=morse(str)
 	r=[];
@@ -35,22 +35,29 @@ function r=morse(str)
 		printf("\n");
 	end
 end
-code=morse("CQ CQ CQ DE DL5IRO");
+code=morse("CQ DE DL5IRO");
+code=morse("CQ");
 
 Fs=8000;
 
 ditDuration=60e-3; % 20WpM = 60ms ; 12WpM = 100ms ; ms = 1200/WpM
-F=700; % use 0Hz to hear/display the hull
-% also you can hear the leakage from DC without the tone
-% problem is hearing starts at about 20Hz and your ears are probalby not very linear in this range
-B=0; % bandwidth of noise set to 0 to disable
+F=550; % use 0Hz to hear/display the hull
+# also you can hear the leakage from DC without the tone
+# problem is hearing starts at about 20Hz and your ears are probalby not very linear in this range
+B=50; % bandwidth of filter set to 0 to disable
+
+# Add noise if snr < 100 in dB
+# this is representativ to what FT8 claims as SNR reference is a 2.5kHz wide channel
+# However a 100Hz channel is skewed by 14dB
+snr=-10;
+printf("SNR %.1f dB for B=%.0f Hz\n", snr-log10(B/2500)*10, B); # print true SNR for B
 
 rampOffset=1e-2; % initial step allowed to make
-% a step of 1e-2 is equal to -40dB discontinuiti
-% used by at least exp & hamming window
+# a step of 1e-2 is equal to -40dB discontinuiti
+# used by at least exp & hamming window
 rampTime=5e-3;
-% the ramp time is the total duration of the ramp
-% the ramp is centered on the transient, and extends half in both direction
+# the ramp time is the total duration of the ramp
+# the ramp is centered on the transient, and extends half in both direction
 
 if rampTime > ditDuration
     printf("Invalid arguments: rampTime (%g) > ditDuration (%g)\n", rampTime, ditDuration)
@@ -65,7 +72,7 @@ end
 rampLinear=tRamp;
 rampExp=exp((tRamp-1)*log(1/rampOffset));
 
-% https://en.wikipedia.org/wiki/Window_function
+# https://en.wikipedia.org/wiki/Window_function
 rampRect=rampCosiNuts(tRamp, 1);
 rampHann=rampCosiNuts(tRamp, 0.5, 0.5);
 rampHamm=rampCosiNuts(tRamp, 0.5*(1+rampOffset), 0.5*(1-rampOffset));
@@ -74,7 +81,8 @@ rampNut =rampCosiNuts(tRamp, 0.355768, 0.487396, 0.144232, 0.012604);
 rampBlackNut=rampCosiNuts(tRamp, 0.3635819, 0.4891775, 0.1365995, 0.0106411);
 rampFlatTop=rampCosiNuts(tRamp, 0.21557895, 0.41663158, 0.277263158, 0.083578947, 0.006947368);
 
-ramp=rampHann;
+# select the "window function" for ramp
+ramp=rampNut;
 
 ditSamples=round(Fs*ditDuration);
 Z=zeros(1,(ditSamples - length(ramp)));
@@ -104,25 +112,45 @@ for s = code
 	A=[A, v];
 end
 
-A=[A, zeros(1, Fs/25)]; % Octave closes audio device too early, prevent audible click
+A=[A, zeros(1, Fs)]; # Octave closes audio device too early, prevent audible click
 t=(1:length(A))/Fs;
-v=A.*cos(t*2*pi*F);
+v=A.*sqrt(2).*cos(t*2*pi*F);
+
+if snr < 100
+	pkg load communications
+	snr+=log10(2500/Fs)*10; # Hamradio "standard" is a 2.5kHz channel
+	v=awgn(v, snr);
+end
 
 if B > 0
 	pkg load signal
 
 	f1=2*(F-B/2)/Fs;
 	f2=2*(F+B/2)/Fs;
+	N=round(Fs * ditDuration * 10);
+	if f1 > 0
+		f=fir2(N, [0, f1, f1, f2, f2, 1], [0,0,1,1,0,0]);
+	else
+		f=fir2(N, [0, 2*B/Fs, 2*B/Fs, 1], [1,1,0,0]);
+	end
+	[H W]=freqz(f);
 
-	f=fir2(round(50*Fs/F), [0, f1, f1, f2, f2, 1], [0,0,1,1,0,0], 1024*64, 1);
-	freqz(f);
-	noise=log(Fs)*rand(1,length(A)); % needs to be scaled with Fs, also make sure it's AWGN
-	v=filter(f,1,v + noise);
+	subplot(2, 1, 1);
+	plot(W, 20*log10(abs(H)));
+	grid("on");
+	axis([W(1) W(end) -100 1]);
+	xlabel('Normalized Frequency [\times\pi rad/sample]');
+	ylabel("Magnitude [dB]");
+	subplot(2, 1, 2);
+
+	v=filter(f,1,v);
 end
 
 plot(t,v)
+xlabel('Time');
+ylabel("Amplitude");
 
-player=audioplayer(v *0.1, Fs);
+player=audioplayer(v *0.05, Fs);
 playblocking(player);
 
 
